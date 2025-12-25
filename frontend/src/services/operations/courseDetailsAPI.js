@@ -75,15 +75,27 @@ export const fetchCourseCategories = async () => {
   let result = []
 
   try {
+    console.log("Fetching categories from:", COURSE_CATEGORIES_API)
     const response = await apiConnector("GET", COURSE_CATEGORIES_API)
     console.log("COURSE_CATEGORIES_API RESPONSE............", response)
+    
     if (!response?.data?.success) {
-      throw new Error("Could Not Fetch Course Categories")
+      throw new Error(response?.data?.message || "Could Not Fetch Course Categories")
     }
-    result = response?.data?.data
+    
+    result = response?.data?.data || []
+    console.log("Categories fetched:", result)
   } catch (error) {
     console.log("COURSE_CATEGORY_API API ERROR............", error)
-    toast.error(error.message)
+    console.log("Error response:", error.response)
+    console.log("Error data:", error.response?.data)
+    
+    // Only show toast if it's not a network error (to avoid spam)
+    if (error.response) {
+      toast.error(error.response?.data?.message || "Could Not Fetch Course Categories")
+    } else {
+      console.error("Network error or server not reachable:", error.message)
+    }
   }
   return result
 }

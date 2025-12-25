@@ -26,12 +26,20 @@ export default function CourseInformationForm() {
   useEffect(() => {
     const getCategories = async () => {
       setLoading(true)
-      const categories = await fetchCourseCategories();
-      if (categories.length > 0) {
-        // console.log("categories", categories)
-        setCourseCategories(categories)
+      try {
+        const categories = await fetchCourseCategories();
+        console.log("Fetched categories:", categories);
+        if (categories && categories.length > 0) {
+          setCourseCategories(categories)
+        } else {
+          console.warn("No categories found in database");
+          // Keep empty array, will show "Choose a Category" option
+        }
+      } catch (error) {
+        console.error("Error fetching categories:", error);
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
     // if form is in edit mode 
     // It will add value in input field
@@ -222,17 +230,26 @@ export default function CourseInformationForm() {
           defaultValue=""
           id="courseCategory"
           className="form-style w-full cursor-pointer"
+          disabled={loading}
         >
           <option value="" disabled>
-            Choose a Category
+            {loading ? "Loading categories..." : courseCategories.length === 0 ? "No categories available" : "Choose a Category"}
           </option>
-          {!loading &&
-            courseCategories?.map((category, indx) => (
-              <option key={indx} value={category?._id}>
+          {!loading && courseCategories.length > 0 &&
+            courseCategories.map((category, indx) => (
+              <option key={category?._id || indx} value={category?._id}>
                 {category?.name}
               </option>
             ))}
         </select>
+        {loading && (
+          <p className="ml-2 text-xs text-richblack-400">Loading categories...</p>
+        )}
+        {!loading && courseCategories.length === 0 && (
+          <p className="ml-2 text-xs text-yellow-200">
+            No categories found. Please contact admin to create categories.
+          </p>
+        )}
         {errors.courseCategory && (
           <span className="ml-2 text-xs tracking-wide text-pink-200">
             Course Category is required

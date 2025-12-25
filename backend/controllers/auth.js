@@ -1,86 +1,25 @@
-// sendOtp , signup , login ,  changePassword
+// signup , login ,  changePassword
 const User = require('./../models/user');
 const Profile = require('./../models/profile');
-const optGenerator = require('otp-generator');
-const OTP = require('../models/OTP')
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const cookie = require('cookie');
 const mailSender = require('../utils/mailSender');
-const otpTemplate = require('../mail/templates/emailVerificationTemplate');
 const { passwordUpdated } = require("../mail/templates/passwordUpdate");
-
-// ================ SEND-OTP For Email Verification ================
-exports.sendOTP = async (req, res) => {
-    try {
-
-        // fetch email from re.body 
-        const { email } = req.body;
-
-        // check user already exist ?
-        const checkUserPresent = await User.findOne({ email });
-
-        // if exist then response
-        if (checkUserPresent) {
-            console.log('(when otp generate) User alreay registered')
-            return res.status(401).json({
-                success: false,
-                message: 'User is Already Registered'
-            })
-        }
-
-        // generate Otp
-        const otp = optGenerator.generate(6, {
-            upperCaseAlphabets: false,
-            lowerCaseAlphabets: false,
-            specialChars: false
-        })
-        // console.log('Your otp - ', otp);
-
-        const name = email.split('@')[0].split('.').map(part => part.replace(/\d+/g, '')).join(' ');
-        console.log(name);
-
-        // send otp in mail
-        await mailSender(email, 'OTP Verification Email', otpTemplate(otp, name));
-
-        // create an entry for otp in DB
-        const otpBody = await OTP.create({ email, otp });
-        // console.log('otpBody - ', otpBody);
-
-
-
-        // return response successfully
-        res.status(200).json({
-            success: true,
-            otp,
-            message: 'Otp sent successfully'
-        });
-    }
-
-    catch (error) {
-        console.log('Error while generating Otp - ', error);
-        res.status(200).json({
-            success: false,
-            message: 'Error while generating Otp',
-            error: error.mesage
-        });
-    }
-}
-
 
 // ================ SIGNUP ================
 exports.signup = async (req, res) => {
     try {
         // extract data 
         const { firstName, lastName, email, password, confirmPassword,
-            accountType, contactNumber, otp } = req.body;
+            accountType, contactNumber } = req.body;
 
         // validation
-        if (!firstName || !lastName || !email || !password || !confirmPassword || !accountType || !otp) {
-            return res.status(401).json({
+        if (!firstName || !lastName || !email || !password || !confirmPassword || !accountType) {
+            return res.status(400).json({
                 success: false,
-                message: 'All fields are required..!'
+                message: 'All fields are required'
             });
         }
 
@@ -88,7 +27,7 @@ exports.signup = async (req, res) => {
         if (password !== confirmPassword) {
             return res.status(400).json({
                 success: false,
-                messgae: 'passowrd & confirm password does not match, Please try again..!'
+                message: 'Password & confirm password do not match, Please try again'
             });
         }
 
@@ -99,36 +38,11 @@ exports.signup = async (req, res) => {
         if (checkUserAlreadyExits) {
             return res.status(400).json({
                 success: false,
-                message: 'User registered already, go to Login Page'
+                message: 'User already registered, please login'
             });
         }
 
-        // find most recent otp stored for user in DB
-        const recentOtp = await OTP.findOne({ email }).sort({ createdAt: -1 }).limit(1);
-        // console.log('recentOtp ', recentOtp)
-
-        // .sort({ createdAt: -1 }): 
-        // It's used to sort the results based on the createdAt field in descending order (-1 means descending). 
-        // This way, the most recently created OTP will be returned first.
-
-        // .limit(1): It limits the number of documents returned to 1. 
-
-
-        // if otp not found
-        if (!recentOtp || recentOtp.length == 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'Otp not found in DB, please try again'
-            });
-        } else if (otp !== recentOtp.otp) {
-            // otp invalid
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid Otp'
-            })
-        }
-
-        // hash - secure passoword
+        // hash - secure password
         let hashedPassword = await bcrypt.hash(password, 10);
 
         // additionDetails
@@ -136,16 +50,32 @@ exports.signup = async (req, res) => {
             gender: null, dateOfBirth: null, about: null, contactNumber: null
         });
 
-        let approved = "";
-        approved === "Instructor" ? (approved = false) : (approved = true);
+        // Set approved status: Instructors need approval, Students are auto-approved
+        const approved = accountType === "Instructor" ? false : true;
+
+        console.log('Creating user with data:', {
+            firstName,
+            lastName,
+            email,
+            accountType,
+            approved,
+            hasProfile: !!profileDetails._id
+        });
 
         // create entry in DB
         const userData = await User.create({
-            firstName, lastName, email, password: hashedPassword, contactNumber,
-            accountType: accountType, additionalDetails: profileDetails._id,
+            firstName, 
+            lastName, 
+            email, 
+            password: hashedPassword, 
+            contactNumber,
+            accountType: accountType, 
+            additionalDetails: profileDetails._id,
             approved: approved,
             image: `https://api.dicebear.com/5.x/initials/svg?seed=${firstName} ${lastName}`
         });
+
+        console.log('User created successfully:', userData._id);
 
         // return success message
         res.status(200).json({
@@ -156,11 +86,33 @@ exports.signup = async (req, res) => {
 
     catch (error) {
         console.log('Error while registering user (signup)');
-        console.log(error)
-        res.status(401).json({
+        console.log('Error details:', error);
+        console.log('Error message:', error.message);
+        console.log('Error stack:', error.stack);
+        
+        // Handle specific MongoDB validation errors
+        if (error.name === 'ValidationError') {
+            const validationErrors = Object.values(error.errors).map(err => err.message).join(', ');
+            return res.status(400).json({
+                success: false,
+                error: validationErrors,
+                message: `Validation Error: ${validationErrors}`
+            });
+        }
+        
+        // Handle duplicate key errors (e.g., email already exists)
+        if (error.code === 11000) {
+            return res.status(400).json({
+                success: false,
+                error: error.message,
+                message: 'User with this email already exists'
+            });
+        }
+        
+        res.status(500).json({
             success: false,
             error: error.message,
-            messgae: 'User cannot be registered , Please try again..!'
+            message: error.message || 'User cannot be registered, Please try again'
         })
     }
 }

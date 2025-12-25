@@ -1,8 +1,11 @@
-const BASE_URL = import.meta.env.VITE_APP_BASE_URL;
+// Get BASE_URL from environment variable, with fallback
+const BASE_URL = import.meta.env.VITE_APP_BASE_URL || "http://localhost:5000/api/v1";
+
+// Log BASE_URL for debugging (remove in production)
+console.log("API BASE_URL:", BASE_URL);
 
 // AUTH ENDPOINTS
 export const endpoints = {
-  SENDOTP_API: BASE_URL + "/auth/sendotp",
   SIGNUP_API: BASE_URL + "/auth/signup",
   LOGIN_API: BASE_URL + "/auth/login",
   RESETPASSTOKEN_API: BASE_URL + "/auth/reset-password-token",
@@ -21,6 +24,7 @@ export const studentEndpoints = {
   COURSE_PAYMENT_API: BASE_URL + "/payment/capturePayment",
   COURSE_VERIFY_API: BASE_URL + "/payment/verifyPayment",
   SEND_PAYMENT_SUCCESS_EMAIL_API: BASE_URL + "/payment/sendPaymentSuccessEmail",
+  DIRECT_ENROLLMENT_API: BASE_URL + "/payment/directEnrollment",
 }
 
 // COURSE ENDPOINTS

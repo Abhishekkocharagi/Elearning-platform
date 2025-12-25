@@ -45,20 +45,23 @@ exports.showAllCategories = async (req, res) => {
     try {
         // get all category from DB
         const allCategories = await Category.find({}, { name: true, description: true });
+        
+        console.log(`Found ${allCategories.length} categories`);
 
         // return response
         res.status(200).json({
             success: true,
             data: allCategories,
-            message: 'All allCategories fetched successfully'
+            message: `All categories fetched successfully (${allCategories.length} found)`
         })
     }
     catch (error) {
-        console.log('Error while fetching all allCategories');
+        console.log('Error while fetching all categories');
         console.log(error);
         res.status(500).json({
             success: false,
-            message: 'Error while fetching all allCategories'
+            message: 'Error while fetching all categories',
+            error: error.message
         })
     }
 }

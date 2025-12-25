@@ -7,64 +7,27 @@ import { apiConnector } from "../apiConnector"
 import { endpoints } from "../apis"
 
 const {
-  SENDOTP_API,
   SIGNUP_API,
   LOGIN_API,
   RESETPASSTOKEN_API,
   RESETPASSWORD_API,
 } = endpoints
 
-// ================ send Otp ================
-export function sendOtp(email, navigate) {
+// ================ Sign Up ================
+export function signup(signupData, navigate) {
   return async (dispatch) => {
-
     const toastId = toast.loading("Loading...");
     dispatch(setLoading(true));
-
+    
     try {
-      const response = await apiConnector("POST", SENDOTP_API, {
-        email,
-        checkUserPresent: true,
-      })
-      // console.log("SENDOTP API RESPONSE ---> ", response)
+      console.log("Signup data being sent:", signupData);
+      console.log("Signup API endpoint:", SIGNUP_API);
+      
+      const response = await apiConnector("POST", SIGNUP_API, signupData);
+      
+      console.log("Signup API response:", response);
 
-      // console.log(response.data.success)
       if (!response.data.success) {
-        throw new Error(response.data.message);
-      }
-
-      navigate("/verify-email");
-      toast.success("OTP Sent Successfully");
-    } catch (error) {
-      console.log("SENDOTP API ERROR --> ", error);
-      toast.error(error.response.data?.message);
-      // toast.error("Could Not Send OTP")
-    }
-    dispatch(setLoading(false));
-    toast.dismiss(toastId);
-  }
-}
-
-// ================ sign Up ================
-export function signUp(accountType, firstName, lastName, email, password, confirmPassword, otp, navigate) {
-  return async (dispatch) => {
-
-    const toastId = toast.loading("Loading...");
-    dispatch(setLoading(true));
-    try {
-      const response = await apiConnector("POST", SIGNUP_API, {
-        accountType,
-        firstName,
-        lastName,
-        email,
-        password,
-        confirmPassword,
-        otp,
-      })
-
-      // console.log("SIGNUP API RESPONSE --> ", response);
-      if (!response.data.success) {
-        toast.error(response.data.message);
         throw new Error(response.data.message);
       }
 
@@ -72,12 +35,34 @@ export function signUp(accountType, firstName, lastName, email, password, confir
       navigate("/login");
     } catch (error) {
       console.log("SIGNUP API ERROR --> ", error);
-      // toast.error(error.response.data.message);
-      toast.error("Invalid OTP");
-      // navigate("/signup")
+      console.log("Error response:", error.response);
+      console.log("Error data:", error.response?.data);
+      console.log("Error message:", error.message);
+      console.log("Full error:", JSON.stringify(error, null, 2));
+      
+      // Show more specific error messages
+      let errorMessage = "Signup Failed. Please try again.";
+      
+      if (error.response) {
+        // Server responded with error
+        errorMessage = error.response.data?.message 
+          || error.response.data?.error 
+          || error.message;
+      } else if (error.request) {
+        // Request was made but no response received
+        errorMessage = "Cannot connect to server. Please make sure the backend server is running on port 5000.";
+        console.log("No response received. Check if backend server is running.");
+        console.log("Attempted URL:", SIGNUP_API);
+        console.log("Make sure to start the backend server: cd backend && node server.js");
+      } else {
+        // Something else happened
+        errorMessage = error.message || errorMessage;
+      }
+      
+      toast.error(errorMessage);
     }
-    dispatch(setLoading(false))
-    toast.dismiss(toastId)
+    dispatch(setLoading(false));
+    toast.dismiss(toastId);
   }
 }
 
@@ -117,7 +102,7 @@ export function login(email, password, navigate) {
       navigate("/dashboard/my-profile");
     } catch (error) {
       console.log("LOGIN API ERROR.......", error)
-      toast.error(error.response?.data?.message)
+      toast.error(error.response?.data?.message || "Login Failed. Please check your credentials.")
     }
     dispatch(setLoading(false))
     toast.dismiss(toastId)

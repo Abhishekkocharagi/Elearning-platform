@@ -109,6 +109,142 @@ exports.verifyPayment = async (req, res) => {
 }
 
 
+// ================ Direct Enrollment (without payment) ================
+exports.directEnrollment = async (req, res) => {
+    try {
+        const { coursesId } = req.body;
+        const userId = req.user.id;
+
+        console.log("Direct enrollment request - userId:", userId, "coursesId:", coursesId);
+
+        if (!coursesId || coursesId.length === 0) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "Please provide Course Id" 
+            });
+        }
+
+        if (!userId) {
+            return res.status(401).json({ 
+                success: false, 
+                message: "User not authenticated" 
+            });
+        }
+
+        let enrolledCount = 0;
+        let skippedCount = 0;
+
+        // Use the existing enrollStudents function logic
+        for (const courseId of coursesId) {
+            try {
+                // Check if user already enrolled
+                const course = await Course.findById(courseId);
+                if (!course) {
+                    console.log(`Course ${courseId} not found`);
+                    return res.status(404).json({ 
+                        success: false, 
+                        message: `Course with id ${courseId} not found` 
+                    });
+                }
+
+                // Check if user is already enrolled (handle both ObjectId and string formats)
+                const isAlreadyEnrolled = course.studentsEnrolled && course.studentsEnrolled.some(id => {
+                    const idString = id.toString ? id.toString() : id;
+                    const userIdString = userId.toString ? userId.toString() : userId;
+                    return idString === userIdString;
+                });
+                
+                if (isAlreadyEnrolled) {
+                    console.log(`User ${userId} already enrolled in course ${courseId}`);
+                    skippedCount++;
+                    continue; // Skip if already enrolled
+                }
+
+                // Enroll student in course
+                const enrolledCourse = await Course.findOneAndUpdate(
+                    { _id: courseId },
+                    { $push: { studentsEnrolled: userId } },
+                    { new: true },
+                );
+
+                if (!enrolledCourse) {
+                    console.log(`Failed to enroll in course ${courseId}`);
+                    return res.status(500).json({ 
+                        success: false, 
+                        message: "Failed to enroll in course" 
+                    });
+                }
+
+                console.log(`Enrolled user ${userId} in course ${courseId}`);
+
+                // Initialize course progress with 0 percent
+                const courseProgress = await CourseProgress.create({
+                    courseID: courseId,
+                    userId: userId,
+                    completedVideos: [],
+                });
+
+                // Find the student and add the course to their list of enrolled courses
+                const enrolledStudent = await User.findByIdAndUpdate(
+                    userId,
+                    {
+                        $push: {
+                            courses: courseId,
+                            courseProgress: courseProgress._id,
+                        },
+                    },
+                    { new: true }
+                );
+
+                if (!enrolledStudent) {
+                    console.log(`Failed to update user ${userId} with course ${courseId}`);
+                    return res.status(500).json({ 
+                        success: false, 
+                        message: "Failed to update user enrollment" 
+                    });
+                }
+
+                enrolledCount++;
+
+                // Send an email notification to the enrolled student
+                try {
+                    await mailSender(
+                        enrolledStudent.email,
+                        `Successfully Enrolled into ${enrolledCourse.courseName}`,
+                        courseEnrollmentEmail(enrolledCourse.courseName, `${enrolledStudent.firstName}`)
+                    );
+                } catch (emailError) {
+                    console.log("Email sending failed:", emailError);
+                    // Don't fail enrollment if email fails
+                }
+            } catch (error) {
+                console.log(`Error enrolling in course ${courseId}:`, error);
+                console.log("Error stack:", error.stack);
+                return res.status(500).json({ 
+                    success: false, 
+                    message: `Error enrolling in course: ${error.message}`,
+                    error: error.message
+                });
+            }
+        }
+
+        console.log(`Enrollment complete - Enrolled: ${enrolledCount}, Skipped: ${skippedCount}`);
+
+        return res.status(200).json({
+            success: true,
+            message: `Successfully enrolled in ${enrolledCount} course(s)${skippedCount > 0 ? `, ${skippedCount} already enrolled` : ''}`
+        });
+    } catch (error) {
+        console.log("Direct enrollment error:", error);
+        console.log("Error stack:", error.stack);
+        return res.status(500).json({
+            success: false,
+            message: "Error enrolling in course",
+            error: error.message
+        });
+    }
+};
+
 // ================ enroll Students to course after payment ================
 const enrollStudents = async (courses, userId, res) => {
 

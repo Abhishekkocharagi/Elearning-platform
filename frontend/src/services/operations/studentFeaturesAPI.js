@@ -6,7 +6,7 @@ import { setPaymentLoading } from "../../slices/courseSlice";
 import { resetCart } from "../../slices/cartSlice";
 
 
-const { COURSE_PAYMENT_API, COURSE_VERIFY_API, SEND_PAYMENT_SUCCESS_EMAIL_API } = studentEndpoints;
+const { COURSE_PAYMENT_API, COURSE_VERIFY_API, SEND_PAYMENT_SUCCESS_EMAIL_API, DIRECT_ENROLLMENT_API } = studentEndpoints;
 
 function loadScript(src) {
     return new Promise((resolve) => {
@@ -23,68 +23,50 @@ function loadScript(src) {
     })
 }
 
-// ================ buyCourse ================ 
+// ================ buyCourse (Direct Enrollment - No Payment) ================ 
 export async function buyCourse(token, coursesId, userDetails, navigate, dispatch) {
-    const toastId = toast.loading("Loading...");
+    const toastId = toast.loading("Enrolling in course...");
+    dispatch(setPaymentLoading(true));
 
     try {
-        //load the script
-        const res = await loadScript("https://checkout.razorpay.com/v1/checkout.js");
-
-        if (!res) {
-            toast.error("RazorPay SDK failed to load");
-            return;
-        }
-
-        // initiate the order
-        const orderResponse = await apiConnector("POST", COURSE_PAYMENT_API,
+        console.log("Enrolling in courses:", coursesId);
+        console.log("API endpoint:", DIRECT_ENROLLMENT_API);
+        
+        // Direct enrollment without payment
+        const response = await apiConnector("POST", DIRECT_ENROLLMENT_API,
             { coursesId },
             {
                 Authorization: `Bearer ${token}`,
-            })
-        // console.log("orderResponse... ", orderResponse);
-        if (!orderResponse.data.success) {
-            throw new Error(orderResponse.data.message);
+            });
+
+        console.log("Enrollment response:", response);
+
+        if (!response.data.success) {
+            throw new Error(response.data.message || "Enrollment failed");
         }
 
-        const RAZORPAY_KEY = import.meta.env.VITE_APP_RAZORPAY_KEY;
-        // console.log("RAZORPAY_KEY...", RAZORPAY_KEY);
-
-        // options
-        const options = {
-            key: RAZORPAY_KEY,
-            currency: orderResponse.data.message.currency,
-            amount: orderResponse.data.message.amount,
-            order_id: orderResponse.data.message.id,
-            name: "StudyNotion",
-            description: "Thank You for Purchasing the Course",
-            image: rzpLogo,
-            prefill: {
-                name: userDetails.firstName,
-                email: userDetails.email
-            },
-            handler: function (response) {
-                //send successful mail
-                sendPaymentSuccessEmail(response, orderResponse.data.message.amount, token);
-                //verifyPayment
-                verifyPayment({ ...response, coursesId }, token, navigate, dispatch);
-            }
-        }
-
-        const paymentObject = new window.Razorpay(options);
-        paymentObject.open();
-        paymentObject.on("payment.failed", function (response) {
-            toast.error("oops, payment failed");
-            console.log("payment failed.... ", response.error);
-        })
-
+        toast.success("Successfully enrolled in course(s)!");
+        navigate("/dashboard/enrolled-courses");
+        dispatch(resetCart());
     }
     catch (error) {
-        console.log("PAYMENT API ERROR.....", error);
-        toast.error(error.response?.data?.message);
-        // toast.error("Could not make Payment");
+        console.log("ENROLLMENT API ERROR.....", error);
+        console.log("Error response:", error.response);
+        console.log("Error data:", error.response?.data);
+        console.log("Error message:", error.message);
+        
+        const errorMessage = error.response?.data?.message 
+            || error.response?.data?.error 
+            || error.message 
+            || "Could not enroll in course. Please try again.";
+        
+        toast.error(errorMessage);
+        throw error; // Re-throw so calling function knows it failed
     }
-    toast.dismiss(toastId);
+    finally {
+        toast.dismiss(toastId);
+        dispatch(setPaymentLoading(false));
+    }
 }
 
 
