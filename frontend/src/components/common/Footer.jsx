@@ -176,12 +176,12 @@ const Footer = () => {
             <div className="flex ">
               <span> Made with 💖</span>
 
-              <Link to='https://github.com/Aniruddha-Gade' target="__blank" className="text-white hover:underline mr-1"
+              <Link to='https://github.com/Abhis' target="__blank" className="text-white hover:underline mr-1"
               >
                 Abhishek Kocharagi
               </Link>
             </div>
-            <span> © 2025 SkillEdge</span>
+            <span> © 2025 Learnix</span>
           </div>
 
           <div className="flex items-center">
